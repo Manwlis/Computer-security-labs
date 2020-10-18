@@ -1,9 +1,10 @@
 all: library demo
 
-library:  
-	gcc -Wall -Wextra -o simple_crypto.o simple_crypto.c -O
-demo: library
-	gcc -Wall -Wextra -o demo demo.c simple_crypto.o
+library: simple_crypto.c simple_crypto.h
+	gcc -c simple_crypto.c -O2 -Wall -Wextra -pedantic
+
+demo: demo.c library
+	gcc -o demo demo.c simple_crypto.o -O2 -Wall -Wextra -pedantic
 
 clean:
 	rm -f simple_crypto.o demo 
