@@ -5,7 +5,6 @@
 #include <unistd.h>
 #include "simple_crypto.h"
 
-// malloc kai files perror?
 
 /************************************
 Read input of variable size.
@@ -77,7 +76,7 @@ int main( void )
 	char* decrypted_text;
 	char* input_key;
 	char* key;
-	uint caesars_key;
+	int caesars_key;
 
 /***************** OTP *****************/
     printf( "[OTP] input: " );
@@ -85,16 +84,17 @@ int main( void )
 	plaintext = strip_string( input , ALNUM ); // skip non-alphanumeric
 
 	// input was a redirected file (<). Print it.
-	if ( !isatty(STDIN_FILENO) )
-		printf("%s\n", plaintext);
+	if ( !isatty( STDIN_FILENO ) )
+		printf( "%s\n" , plaintext );
 
-	ciphertext = otp_encrypt( plaintext );
+	ciphertext = otp_encrypt( plaintext , &key );
 	printf( "[OTP] encrypted: %s\n" , ciphertext );
-	decrypted_text = otp_decrypt( ciphertext );
+	decrypted_text = otp_decrypt( ciphertext , key );
 	printf( "[OTP] decrypted: %s\n" , decrypted_text );
 
 	free( input );
 	free( plaintext );
+	free( key );
 	free( ciphertext );
 	free( decrypted_text );
 
@@ -104,19 +104,19 @@ int main( void )
 	plaintext = strip_string( input , ALNUM ); // skip non-alphanumeric
 
 	// input was a redirected file (<). Print it.
-	if ( !isatty(STDIN_FILENO) )
-		printf("%s\n", plaintext);
+	if ( !isatty( STDIN_FILENO ) )
+		printf( "%s\n" , plaintext );
 
 	printf( "[Caesars] key: " );
     caesars_key = atoi ( input_string( stdin ) );
 
 	// input was a redirected file (<). Print it.
-	if ( !isatty(STDIN_FILENO) )
-		printf("%d\n", caesars_key);
+	if ( !isatty( STDIN_FILENO ) )
+		printf( "%d\n" , caesars_key );
 
-	ciphertext = caesars_encrypt( plaintext , caesars_key );
+	ciphertext = caesars_encrypt( plaintext , caesars_key , NULL );
 	printf( "[Caesars] encrypted: %s\n" , ciphertext );
-	decrypted_text = caesars_decrypt( ciphertext , caesars_key );
+	decrypted_text = caesars_decrypt( ciphertext , caesars_key , NULL );
 	printf( "[Caesars] decrypted: %s\n" , decrypted_text );
 
 	free( input );
@@ -130,20 +130,20 @@ int main( void )
 	plaintext = strip_string( input , UPPER ); // skip non-uppercase
 
 	// input was a redirected file (<). Print it.
-	if ( !isatty(STDIN_FILENO) )
-		printf("%s\n", plaintext);
+	if ( !isatty( STDIN_FILENO ) )
+		printf( "%s\n" , plaintext );
 
 	printf( "[Vigenere] key: " );
     input_key = input_string( stdin );
 	key = strip_string( input_key , UPPER ); // skip non-uppercase
 	
 	// input was a redirected file (<). Print it.
-	if ( !isatty(STDIN_FILENO) )
+	if ( !isatty( STDIN_FILENO ) )
 		printf("%s\n", key);
 
-	ciphertext = vigenere_encrypt( plaintext , key );
+	ciphertext = vigenere_encrypt( plaintext , key , NULL );
 	printf( "[Vigenere] encrypted: %s\n" , ciphertext );
-	decrypted_text = vigenere_decrypt( ciphertext , key );
+	decrypted_text = vigenere_decrypt( ciphertext , key , NULL );
 	printf( "[Vigenere] decrypted: %s\n" , decrypted_text );
 
 	free( input );

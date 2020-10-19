@@ -1,6 +1,6 @@
 all: library demo
 
-library: simple_crypto.c simple_crypto.h
+library: simple_crypto.c
 	gcc -c simple_crypto.c -O2 -Wall -Wextra -pedantic
 
 demo: demo.c library
