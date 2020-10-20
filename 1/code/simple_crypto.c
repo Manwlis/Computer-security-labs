@@ -1,3 +1,11 @@
+/* 
+simple_crypto.h
+Implementation of the simple_crypto library.
+Created: 16/10/2020
+Author: Emmanouil Petrakos
+Developed with VScode 1.50.1 on WSL2
+*/
+
 #include "simple_crypto.h"
 
 
@@ -19,9 +27,7 @@ char* otp_encrypt( char* message , char** otp_key )
 	{
 		(*otp_key)[index] = fgetc( urandom ); // get a random character
 		ciphertext[index] = message[index] ^ (*otp_key)[index]; // XOR message with key
-		// if ciphertext[index] is a printable character, keep it. Else do it again
-		if( ciphertext[index] >= 33 && ciphertext[index] != 127 ) // 127 = DEL
-			index++;
+		index++;
 	}
 	return ciphertext;
 }
@@ -60,8 +66,15 @@ char* caesars_encrypt( char* message , int key, char* dictionary )
 	// shift each character
 	for( size_t i = 0 ; i < strlen( message ) ; i++ )
 	{
+		// look in dictionary for the char
+		char* pos_in_dict = strchr( dictionary , message[i] );
+		if ( !pos_in_dict ) // character not in dictionary
+		{
+			free( ciphertext );
+			return NULL; // return NULL pointer on error
+		}
 		// distance between character and the start of the array 
-		int start_position = (int) ( strchr( dictionary , message[i] ) - dictionary );
+		int start_position = (int) ( pos_in_dict - dictionary );
 
 		// out of dictionary
 		if( start_position + key >= dict_size )
@@ -70,7 +83,6 @@ char* caesars_encrypt( char* message , int key, char* dictionary )
 		else
 			ciphertext[i] = dictionary[ start_position + key ];
 	}
-
 	return ciphertext;
 }
 
@@ -90,8 +102,15 @@ char* caesars_decrypt( char* ciphertext , int key, char* dictionary )
 	// shift each character
 	for( size_t i = 0 ; i < strlen( ciphertext ) ; i++ )
 	{
+		// look in dictionary for the char
+		char* pos_in_dict = strchr( dictionary , ciphertext[i] );
+		if ( !pos_in_dict ) // character not in dictionary
+		{
+			free( decrypted_text );
+			return NULL; // return NULL pointer on error
+		}
 		// distance between character and the start of the array 
-		int start_position = (int) ( strchr( dictionary , ciphertext[i] ) - dictionary );
+		int start_position = (int) ( pos_in_dict - dictionary );
 
 		// out of dictionary
 		if( start_position - key < 0 )
@@ -129,8 +148,15 @@ char* vigenere_encrypt( char* message , char* key , char* dictionary )
 	size_t key_index = 0;
 	for( size_t i = 0 ; i < strlen( message ) ; i++ )
 	{
+		// look in dictionary for the char
+		char* pos_in_dict = strchr( dictionary , message[i] );
+		if ( !pos_in_dict ) // character not in dictionary
+		{
+			free( ciphertext );
+			return NULL; // return NULL pointer
+		}
 		// distance between character and the start of the array 
-		int start_position = (int) ( strchr( dictionary , message[i] ) - dictionary );
+		int start_position = (int) ( pos_in_dict - dictionary );
 
 		// out of dictionary
 		if( start_position + shifts[key_index] >= dict_size )
@@ -167,8 +193,15 @@ char* vigenere_decrypt( char* ciphertext , char* key , char* dictionary )
 	size_t key_index = 0;
 	for( size_t i = 0 ; i < strlen( ciphertext ) ; i++ )
 	{
+		// look in dictionary for the char
+		char* pos_in_dict = strchr( dictionary , ciphertext[i] );
+		if ( !pos_in_dict ) // character not in dictionary
+		{
+			free( decrypted_text );
+			return NULL; // return NULL pointer on error
+		}
 		// distance between character and the start of the array 
-		int start_position = (int) ( strchr( dictionary , ciphertext[i] ) - dictionary );
+		int start_position = (int) ( pos_in_dict - dictionary );
 
 		// out of dictionary
 		if( start_position - shifts[key_index] < 0 )

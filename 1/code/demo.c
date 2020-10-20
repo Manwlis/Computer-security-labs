@@ -1,3 +1,11 @@
+/* 
+demo.c
+Demo program to show the use of the simple_crypto library.
+Created: 16/10/2020
+Author: Emmanouil Petrakos
+Developed with VScode 1.50.1 on WSL2
+*/
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -88,7 +96,13 @@ int main( void )
 		printf( "%s\n" , plaintext );
 
 	ciphertext = otp_encrypt( plaintext , &key );
-	printf( "[OTP] encrypted: %s\n" , ciphertext );
+	printf( "[OTP] encrypted: ");
+	// ciphertext has the same lenght as the plaintext.
+	// to avoid stoping strlen to a \0 inside the ciphertext, the lenght of plaintex is used.
+	for( size_t i = 0 ; i < strlen(plaintext) ; i++ )
+		printf( "%02X" , (unsigned char) ciphertext[i] ); // print as hex
+	printf( "\n");
+
 	decrypted_text = otp_decrypt( ciphertext , key );
 	printf( "[OTP] decrypted: %s\n" , decrypted_text );
 
