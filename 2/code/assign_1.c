@@ -1,3 +1,12 @@
+/* 
+assign_2.c
+Tool to encrypt, decrypt, sign and verify files using openSSL library.
+Created: 26/10/2020
+Author: Emmanouil Petrakos
+Developed with VScode 1.50.1 on WSL2
+*/
+
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -9,6 +18,8 @@
 #include <openssl/cmac.h>
 
 #define BLOCK_SIZE 16
+// CMAC size is 128 bits according to https://tools.ietf.org/html/rfc4493
+#define CMAC_SIZE 16
 
 
 /* function prototypes */
@@ -24,14 +35,13 @@ int decrypt(unsigned char *, int, unsigned char *, unsigned char *,
 void gen_cmac(unsigned char *, size_t, unsigned char *, unsigned char *, int);
 int verify_cmac(unsigned char *, unsigned char *);
 
-/* TODO Declare your function prototypes here... */
-
 /*
 * Move data from a file to a sting.
 * @param char* file path
-* @param char** pointer to output string
+* @param char** output string
+* @param long* output size
 */
-void file_to_string( char* input_file , char** string );
+void file_to_string( char* input_file , char** string , long* length );
 
 /*
 * Move data from a string to a file.
@@ -153,17 +163,16 @@ check_args(char *input_file, char *output_file, unsigned char *password,
 void
 keygen(unsigned char *password, unsigned char *key, unsigned char *iv, int bit_mode)
 {
-	const EVP_CIPHER *cipher;
     const EVP_MD *dgst = EVP_get_digestbyname("SHA1");
-    const unsigned char *salt = NULL;
 
+	const EVP_CIPHER *cipher;
 	if( bit_mode == 128 )
-    	cipher = EVP_get_cipherbyname("AES-128-ECB");
+    	cipher = EVP_aes_128_ecb();
     else
-		cipher = EVP_get_cipherbyname("AES-256-ECB");
+		cipher = EVP_aes_256_ecb();
 	
 	// This function is used to derive keying material for an encryption algorithm from a password in the data parameter.
-	EVP_BytesToKey( cipher , dgst , salt , (unsigned char *) password , strlen( (char*) password ) , 1 , key , iv );
+	EVP_BytesToKey( cipher , dgst , NULL , (unsigned char *) password , strlen( (char*) password ) , 1 , key , iv );
 }
 
 
@@ -189,11 +198,12 @@ encrypt(unsigned char *plaintext, int plaintext_len, unsigned char *key, unsigne
 	
 	// start encryption
 	EVP_EncryptUpdate( ctx , ciphertext , &len , plaintext , plaintext_len );
-	printf("%d\n" , len);
 
 	// finalize encryption, encrypts the "final" data.
 	EVP_EncryptFinal_ex( ctx , ciphertext + len , &len );
-	printf("%d\n" , len);
+
+	// clean up
+	EVP_CIPHER_CTX_free(ctx);
 }
 
 
@@ -225,6 +235,9 @@ decrypt(unsigned char *ciphertext, int ciphertext_len, unsigned char *key, unsig
 	EVP_DecryptFinal_ex( ctx , plaintext + len , &len );
 	plaintext_len += len;
 
+	// clean up
+	EVP_CIPHER_CTX_free(ctx);
+
 	return plaintext_len;
 }
 
@@ -233,12 +246,29 @@ decrypt(unsigned char *ciphertext, int ciphertext_len, unsigned char *key, unsig
  * Generates a CMAC
  */
 void
-gen_cmac(unsigned char *data, size_t data_len, unsigned char *key, 
-    unsigned char *cmac, int bit_mode)
+gen_cmac(unsigned char *data, size_t data_len, unsigned char *key, unsigned char *cmac, int bit_mode)
 {
+	size_t cmac_len = 0;
+	// set up a context
+	CMAC_CTX* ctx = CMAC_CTX_new();
 
-	/* TODO Task D */
+	// initialise signing operation
+	const EVP_CIPHER* type;
+	if( bit_mode == 128 )
+		type = EVP_aes_128_ecb();
+	else
+		type = EVP_aes_256_ecb();
 
+	CMAC_Init( ctx , key , bit_mode/8 , type , NULL );
+
+	// start signing
+	CMAC_Update( ctx , data , data_len );
+
+	// finalize signing
+	CMAC_Final( ctx , cmac , &cmac_len );
+
+	// clean up
+	CMAC_CTX_free(ctx);
 }
 
 
@@ -248,31 +278,26 @@ gen_cmac(unsigned char *data, size_t data_len, unsigned char *key,
 int
 verify_cmac(unsigned char *cmac1, unsigned char *cmac2)
 {
-	int verify;
+	for ( int i = 0 ; i < CMAC_SIZE ; i++ )
+		if( cmac1[i] != cmac2[i] )
+			return 0;
 
-	verify = 0;
-
-	/* TODO Task E */
-
-	return verify;
+	return 1;
 }
 
 
-
-
-void file_to_string( char* input_file , char** string )
+void file_to_string( char* input_file , char** string , long* length )
 {
-	long length;
 	FILE* f = fopen ( input_file , "r" );
 
 	if (f)
 	{
 		fseek( f , 0 , SEEK_END );
-		length = ftell(f);
+		*length = ftell(f);
 		fseek( f , 0 , SEEK_SET );
 
-		*string = malloc(length);
-		fread( *string , 1 , length , f );
+		*string = malloc( *length );
+		int fread_value = fread( *string , 1 , *length , f );
 
 		fclose (f);
 	}
@@ -281,7 +306,6 @@ void file_to_string( char* input_file , char** string )
 		perror( "file_to_string" );
 		exit(-1);
 	}
-	//printf( "%s", input_string );
 }
 
 
@@ -356,11 +380,11 @@ int main(int argc, char **argv)
 			op_mode = 0;
 			break;
 		case 's':
-			/* if op_mode == 1 the tool signs */
+			/* if op_mode == 2 the tool signs */
 			op_mode = 2;
 			break;
 		case 'v':
-			/* if op_mode == 1 the tool verifies */
+			/* if op_mode == 3 the tool verifies */
 			op_mode = 3;
 			break;
 		case 'h':
@@ -376,22 +400,15 @@ int main(int argc, char **argv)
 	/* -------------------------------------------------------------------------- */
 	// read FILE
 	unsigned char* input_string = NULL;
-	file_to_string( input_file , (char**) &input_string );
+	long input_size;
+	file_to_string( input_file , (char**) &input_string , &input_size);
 	
-	printf("%ld\n" , strlen( (char*) input_string ) );
-	long input_size = strlen( (char*) input_string );
-
-
 	// make all algorithms available to the EVP* routines
-	//ERR_load_crypto_strings(); // ?????????????
 	OpenSSL_add_all_algorithms();
 
 	/* Key generation from password */
 	unsigned char key[bit_mode / 8]; // char size is in bytes
 	keygen( password , key , NULL , bit_mode );
-
-	//print_hex( key , bit_mode / 8 );
-
 
 	/* encrypt */
 	if( op_mode == 0 )
@@ -413,17 +430,55 @@ int main(int argc, char **argv)
 		// save to file
 		string_to_file( output_file , (char*) plaintext , plaintext_size );
 	}
-	/* sign */
+	/* encrypt and sign */
 	else if( op_mode == 2 )
 	{
-		
+		// encrypt
+		long ciphertext_size = ( input_size / BLOCK_SIZE + 1 ) * BLOCK_SIZE;
+		unsigned char ciphertext[ ciphertext_size ];
+		encrypt( input_string , input_size , key , NULL , ciphertext , bit_mode );
+
+		// generate CMAC
+		unsigned char cmac[ CMAC_SIZE ];
+		gen_cmac( input_string , input_size , key, cmac , bit_mode );
+
+		// concat cypher with cmac
+		unsigned char ciphertext_with_cmac[ ciphertext_size + CMAC_SIZE ];
+		for( int i = 0 ; i < ciphertext_size ; i++ )
+			ciphertext_with_cmac[i] = ciphertext[i];
+		for( int i = ciphertext_size ; i < ciphertext_size + CMAC_SIZE ; i++ )
+			ciphertext_with_cmac[i] = cmac[ i - ciphertext_size ];
+
+		// save to file
+		string_to_file( output_file , (char*) ciphertext_with_cmac , ciphertext_size + CMAC_SIZE );
 	}
-	/* verify */
+	/* decrypt and verify */
 	else if( op_mode == 3 )
 	{
-		
-	}	
+		// separate cyphertext and CMAC
+		long ciphertext_size = input_size - CMAC_SIZE;
+		unsigned char ciphertext[ ciphertext_size ];
+		unsigned char message_cmac[ CMAC_SIZE ];
 
+		for( int i = 0 ; i < ciphertext_size ; i++ )
+			ciphertext[i] = input_string[i];
+		for( int i = ciphertext_size ; i < ciphertext_size + CMAC_SIZE ; i++ )
+			message_cmac[ i - ciphertext_size ] = input_string[ i ];
+
+		// decrypt ciphertext
+		unsigned char plaintext[ ciphertext_size ];
+		int plaintext_size = decrypt( ciphertext , ciphertext_size , key , NULL , plaintext , bit_mode );
+
+		// generate CMAC
+		unsigned char generated_cmac[ CMAC_SIZE ];
+		gen_cmac( plaintext , plaintext_size , key, generated_cmac , bit_mode );
+
+		// compare CMACs. If succesfully verified, save the plaintext
+		if( verify_cmac( message_cmac , generated_cmac ) )
+			string_to_file( output_file , (char*) plaintext , plaintext_size );
+		else
+			printf("The ciphertext is not verifed.\n");
+	}	
 	/* Clean up */
 	free(input_file);
 	free(output_file);
