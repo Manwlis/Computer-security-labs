@@ -1,5 +1,12 @@
-#include "rsa.h"
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <math.h>
+
 #include "utils.h"
+
+# define RSA_SIEVE_LIMIT 255
 
 
 void sieve_of_eratosthenes( int limit , size_t** primes , int* primes_sz )
@@ -69,6 +76,15 @@ size_t choose_e( size_t fi_n , int primes_sz , size_t* primes , FILE* urandom )
 }
 
 
+// size_t mod_inverse( size_t e , size_t fi_n )
+// {
+// 	for( size_t i = 1 ; i < fi_n ; i++ )
+// 		if( ( e * i ) % fi_n == 1 )
+// 			return i;
+// 	return 0;
+// }
+
+
 // adaptation of the extended Euclidean algorithm. ax + by = gcd( a , b ) = 1
 // based on https://en.wikipedia.org/wiki/Extended_Euclidean_algorithm#Computing_multiplicative_inverses_in_modular_structures
 size_t mod_inverse( size_t a , size_t b )
@@ -101,7 +117,7 @@ size_t mod_inverse( size_t a , size_t b )
 }
 
 
-void rsa_keygen( void )
+void main()
 {
 	size_t p;
 	size_t q;
@@ -150,20 +166,10 @@ void rsa_keygen( void )
 
 	// save to files
 
-}
-
-
-void rsa_encrypt( char* input_file , char* output_file , char* key_file )
-{
-
-	/* TODO */
-
-}
-
-
-void rsa_decrypt( char* input_file , char* output_file , char* key_file )
-{
-
-	/* TODO */
-
+	printf( "p	%ld\n" , p );
+	printf( "q	%ld\n" , q );
+	printf( "n	%ld\n" , n );
+	printf( "fi_n	%ld\n" , fi_n );
+	printf( "e	%ld\n" , e );
+	printf( "d	%ld\n" , d );
 }

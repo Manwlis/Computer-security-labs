@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <math.h>
 #include <time.h>
 #include <fcntl.h>
 #include <unistd.h>
@@ -13,14 +14,14 @@
 /*
  * Sieve of Eratosthenes Algorithm
  * https://en.wikipedia.org/wiki/Sieve_of_Eratosthenes
+ * It includes a common optimization, which is to start enumerating the multiples of each prime i from i^2.
  *
  * arg0: A limit
  * arg1: The size of the generated primes list. Empty argument used as ret val
- *
- * ret:  The prime numbers that are less or equal to the limit
+ * arg2:  The prime numbers that are less or equal to the limit. Empty argument used as ret val
  */
-size_t *
-sieve_of_eratosthenes(int, int *);
+
+void sieve_of_eratosthenes( int limit , size_t** primes , int* primes_sz );
 
 
 /*
@@ -40,11 +41,13 @@ gcd(int , int);
  *     1 < e < fi(n) AND gcd(e, fi(n)) == 1
  *
  * arg0: fi(n)
+ * arg1: primes' pool size
+ * arg0: primes' list
+ * arg0: source of randomness
  *
  * ret: 'e'
  */
-size_t
-choose_e(size_t);
+size_t choose_e( size_t , int , size_t* , FILE* );
 
 
 /*
