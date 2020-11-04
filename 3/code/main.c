@@ -28,7 +28,6 @@ int main(int argc, char **argv)
 	key_file = NULL;
 	op_mode = -1;
 
-
 	/*
 	 * Get arguments
 	 */
@@ -61,10 +60,8 @@ int main(int argc, char **argv)
 		}
 	}
 
-
 	/* check arguments */
 	check_args(input_file, output_file, key_file, op_mode);
-
 
 	/* serve each mode... */
 	switch (op_mode) {
@@ -81,13 +78,10 @@ int main(int argc, char **argv)
 		break;
 	}
 
-		
-
 	/* Clean up */
 	free(input_file);
 	free(output_file);
 	free(key_file);
-
 
 	/* END */
 	return 0;

@@ -2,6 +2,8 @@
 #include "utils.h"
 
 
+/*--------------------------------------- Key generation ---------------------------------------*/
+
 void sieve_of_eratosthenes( int limit , size_t** primes , int* primes_sz )
 {
 	// index == number but 0 and 1 are not parts of the sieve
@@ -91,13 +93,27 @@ size_t mod_inverse( size_t a , size_t b )
 		temp = y;
 		y = x - quotient * y;
 		x = temp;
-	} 
-  
+	}
 	// make x positive 
-	if ( x < 0 ) 
-	   x += b; 
+	if ( x < 0 )
+	   x += b;
   
-	return x; 
+	return x;
+}
+
+
+void save_key_to_file( char* filename , size_t a , size_t b )
+{
+	FILE* f = fopen( filename , "w" );
+	if( !f )
+	{
+		perror( filename );
+		exit(-1);
+	}
+	fwrite( &a , sizeof(size_t) , 1 , f );
+	fwrite( &b , sizeof(size_t) , 1 , f );
+
+	fclose(f);
 }
 
 
@@ -112,7 +128,7 @@ void rsa_keygen( void )
 
 	// find primes
 	size_t* primes;
-	unsigned int primes_sz = 0;
+	int primes_sz = 0;
 	sieve_of_eratosthenes( RSA_SIEVE_LIMIT , &primes , &primes_sz );
 
 	// open urandom as file
@@ -130,11 +146,9 @@ void rsa_keygen( void )
 	while ( q_random_index >= primes_sz )
 		q_random_index = (int) fgetc( urandom );
 	
-	
 	// pick two random primes p and q
 	p = primes[ p_random_index ];
 	q = primes[ q_random_index ];
-
 
 	// calculate n
 	n = p * q;
@@ -149,21 +163,148 @@ void rsa_keygen( void )
 	d = mod_inverse( e , fi_n );
 
 	// save to files
+	save_key_to_file( "public.key" , n , d );
+	save_key_to_file( "private.key" , n , e );
+}
 
+
+/*--------------------------------------- Encrypt / Decrupt ---------------------------------------*/
+
+void file_to_string( char* input_file , char** string , size_t* length )
+{
+	FILE* f = fopen ( input_file , "r" );
+
+	if ( !f )
+	{
+		perror( input_file );
+		exit(-1);
+	}
+
+	fseek( f , 0 , SEEK_END );
+	*length = ftell(f);
+	fseek( f , 0 , SEEK_SET );
+
+	*string = malloc( *length );
+	int fread_value = fread( *string , 1 , *length , f );
+
+	fclose (f);
+}
+
+
+void string_to_file( char* output_file , char* string , long length )
+{
+	FILE* f = fopen ( output_file , "w" );
+	
+	if (f)
+	{
+		for( int i = 0 ; i < length ; i++ )
+			fputc( string[i] , f );
+	}
+	else
+	{
+		perror( output_file );
+		exit(-1);
+	}
+	fclose(f);
+}
+
+
+void read_key_from_file( char* filename , size_t* a , size_t* b )
+{
+	FILE* f = fopen( filename , "r" );
+	if( !f )
+	{
+		perror( filename );
+		exit(-1);
+	}
+	int fread_val = fread( a , sizeof(size_t) , 1 , f );
+	fread_val = fread( b , sizeof(size_t) , 1 , f );
+
+	fclose(f);
+}
+
+
+size_t power_modulo(size_t a, size_t b, size_t n)
+{
+	long x = 1;
+	long y = a;
+
+	while ( b > 0 )
+	{
+		if ( b % 2 )
+			x = (x * y) % n;
+
+		// Square the base
+		y = ( y * y ) % n;
+
+		b = b / 2;
+	}
+	return x % n;
 }
 
 
 void rsa_encrypt( char* input_file , char* output_file , char* key_file )
 {
+	// read key
+	size_t n;
+	size_t d_or_e;
+	read_key_from_file( key_file , &n , &d_or_e );
 
-	/* TODO */
+	// read plaintext
+	char* plaintext;
+	size_t plaintext_length;
+	file_to_string( input_file , &plaintext , &plaintext_length );
+	
+	// ciphertext size is 8 times larger than plaintext size
+	size_t ciphertext[ plaintext_length ];
 
+	// encrypt. For every char call power_modulo
+	for( int i = 0 ; i < plaintext_length ; i++ )
+		ciphertext[i] = power_modulo( (size_t) plaintext[i] , d_or_e , n );
+
+	// store ciphertext
+	FILE* f = fopen( output_file , "w" );
+	if( !f )
+	{
+		perror( output_file );
+		exit(-1);
+	}
+	fwrite( ciphertext , sizeof(size_t) , plaintext_length , f );
+
+	fclose(f);
 }
 
 
 void rsa_decrypt( char* input_file , char* output_file , char* key_file )
 {
+	// read key
+	size_t n;
+	size_t d_or_e;
+	read_key_from_file( key_file , &n , &d_or_e );
 
-	/* TODO */
+	// open file and find size
+	FILE* f = fopen ( input_file , "r" );
+	if ( !f )
+	{
+		perror( input_file );
+		exit(-1);
+	}
+	fseek( f , 0 , SEEK_END );
+	size_t size = ftell(f);
+	fseek( f , 0 , SEEK_SET );
 
+	// text length and arrays
+	size_t text_length = size/8;
+	size_t* ciphertext = malloc( sizeof( size_t ) * text_length );
+	char* plaintext = malloc( sizeof( char ) * text_length );
+
+	// read numbers from ciphertext
+	int fread_val = fread( ciphertext , sizeof( size_t ) , text_length , f );
+
+	// decrypt. For every ulong call power_modulo
+	for( int i = 0 ; i < text_length ; i++ )
+		plaintext[i] = (char) power_modulo( ciphertext[i] , d_or_e , n );
+
+	// store plaintext
+	string_to_file( output_file , plaintext , text_length );
 }
