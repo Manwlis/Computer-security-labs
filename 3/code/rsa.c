@@ -10,7 +10,7 @@ void sieve_of_eratosthenes( int limit , size_t** primes , int* primes_sz )
 	// limit is the size of the sieve.
 	int offset = 2;
 	limit = limit + offset;
-	unsigned char sieve[limit];
+	unsigned char* sieve = malloc( limit );
 	// all set to 1
 	memset( sieve , '1', limit );
 
@@ -72,7 +72,7 @@ size_t choose_e( size_t fi_n , int primes_sz , size_t* primes , FILE* urandom )
 
 
 // adaptation of the extended Euclidean algorithm. ax + by = gcd( a , b ) = 1
-// based on https://en.wikipedia.org/wiki/Extended_Euclidean_algorithm#Computing_multiplicative_inverses_in_modular_structures
+// Implementation based on https://en.wikipedia.org/wiki/Extended_Euclidean_algorithm#Computing_multiplicative_inverses_in_modular_structures
 size_t mod_inverse( size_t a , size_t b )
 {
 	long a_new = (long) a;
@@ -168,7 +168,7 @@ void rsa_keygen( void )
 }
 
 
-/*--------------------------------------- Encrypt / Decrupt ---------------------------------------*/
+/*--------------------------------------- Encrypt / Decrypt ---------------------------------------*/
 
 void file_to_string( char* input_file , char** string , size_t* length )
 {
@@ -224,9 +224,11 @@ void read_key_from_file( char* filename , size_t* a , size_t* b )
 }
 
 
+// Implementation based on https://en.wikipedia.org/wiki/Modular_exponentiation#Right-to-left_binary_method
 size_t power_modulo(size_t a, size_t b, size_t n)
 {
-	long x = 1;
+	// no checking for the values of a, b, n. Used only with legal numbers.
+	long x = 1; // result
 	long y = a;
 
 	while ( b > 0 )
@@ -234,10 +236,10 @@ size_t power_modulo(size_t a, size_t b, size_t n)
 		if ( b % 2 )
 			x = (x * y) % n;
 
+		// >> 1 the exponent
+		b = b / 2;
 		// Square the base
 		y = ( y * y ) % n;
-
-		b = b / 2;
 	}
 	return x % n;
 }
@@ -255,8 +257,7 @@ void rsa_encrypt( char* input_file , char* output_file , char* key_file )
 	size_t plaintext_length;
 	file_to_string( input_file , &plaintext , &plaintext_length );
 	
-	// ciphertext size is 8 times larger than plaintext size
-	size_t ciphertext[ plaintext_length ];
+	size_t* ciphertext = malloc( sizeof( size_t ) * plaintext_length );;
 
 	// encrypt. For every char call power_modulo
 	for( int i = 0 ; i < plaintext_length ; i++ )

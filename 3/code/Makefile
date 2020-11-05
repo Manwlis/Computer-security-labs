@@ -11,4 +11,4 @@ $(TARGET): $(OBJFILES)
 	$(CC) $(CFLAGS) -o $(TARGET) $(OBJFILES) -lm
 
 clean:
-	rm -f $(TARGET) *.o *.key
+	rm -f $(TARGET) *.o

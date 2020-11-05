@@ -1,0 +1,20 @@
+All requested functionality has been developed. Tool's skeleton has been preserved.
+
+Key generation is done as the assignment describes. Modular inverse is calculated with the extended Euclidean algorithm.
+Largest tried RSA sieve limit: 1000000000 (1GB sieve table). Keys are saved in "public.key" and "private.key" files.
+
+Encryption/ Decryption is achieved by using power_modulo on every digit. Tried on files up to 300MB, works fine but slow.
+Encrypted files are 8 times larger than the non-encrypted.
+
+New functions:
+save_key_to_file: Saves an rsa key to a file.
+read_key_from_file: Read an rsa key from a file.
+file_to_string: Move data from a file to a sting.
+string_to_file: Move data from a string to a file.
+power_modulo: Calculates c = m^e mod n.
+
+Main sources:
+https://en.wikipedia.org/wiki/RSA_(cryptosystem)#Decryption
+https://www.comparitech.com/blog/information-security/rsa-encryption/#:~:text=Under%20RSA%20encryption%2C%20messages%20are,known%20as%20the%20private%20key.
+https://en.wikipedia.org/wiki/Sieve_of_Eratosthenes
+https://en.wikipedia.org/wiki/Modular_exponentiation#Right-to-left_binary_method

@@ -78,7 +78,7 @@ void
 rsa_keygen(void);
 
 
-/*--------------------------------------- Encrypt / Decrupt ---------------------------------------*/
+/*--------------------------------------- Encrypt / Decrypt ---------------------------------------*/
 
 /*
 * Move data from a file to a sting.
@@ -97,7 +97,7 @@ void file_to_string( char* input_file , char** string , size_t* length );
 void string_to_file( char* output_file , char* string , long length );
 
 /* 
- * Read an rsa key from a file
+ * Read an rsa key from a file.
  * 
  * arg0: file name
  * arg1: n
