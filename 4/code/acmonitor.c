@@ -10,8 +10,7 @@ struct entry {
 	int access_type; /* access type values [0-2] */
 	int action_denied; /* is action denied values [0-1] */
 
-	time_t date; /* file access date */
-	time_t time; /* file access time */
+	time_t date_time; /* file access time */
 
 	char *file; /* filename (string) */
 	char *fingerprint; /* file fingerprint */
