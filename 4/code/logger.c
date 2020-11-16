@@ -9,6 +9,7 @@
 #include <sys/stat.h>
 #include <openssl/md5.h>
 #include <linux/limits.h>
+#include <errno.h>
 
 
 FILE* fopen( const char* path , const char* mode ) 
@@ -22,8 +23,8 @@ FILE* fopen( const char* path , const char* mode )
 
 	// get access type
 	uint access_type = 0;
-	if( access( path, F_OK ) != -1 )
-		access_type = 1;  // file existed
+	if( access( path, F_OK ) != -1 || *mode == 'r' )
+		access_type = 1;  // file existed or read mode
 	if( *mode == 'w' ) // Even if file existed, its content is erased and the file is considered as a new empty file
 		access_type = 0;
 
@@ -35,36 +36,40 @@ FILE* fopen( const char* path , const char* mode )
 
 	// check if action denied
 	uint action_denied = 0;
-	if( !original_fopen_ret )
+	if( !original_fopen_ret && ( errno == EACCES || errno == EBADF ) )
 		action_denied = 1;
 
 	// get actual path
 	char actual_path[PATH_MAX+1];
-	char* actual_path_pointer = realpath( path , actual_path ); // Null if error
+	realpath( path , actual_path );
 
 	// create file fingerprint
-	unsigned char fingerprint[16];
+	unsigned char fingerprint[MD5_DIGEST_LENGTH];
 
 	// get files size
-	int length = 0;
-	if( original_fopen_ret )
-	{
-		int current_pos = ftell(original_fopen_ret);
-		fseek( original_fopen_ret , 0 , SEEK_END );
-		length = ftell(original_fopen_ret);
-		fseek( original_fopen_ret , 0 , current_pos );
-	}
+	int current_pos = ftell( original_fopen_ret );
+	fseek( original_fopen_ret , 0 , SEEK_END );
+	int length = ftell( original_fopen_ret );
+
+	// read file
+	fseek( original_fopen_ret , 0 , SEEK_SET );
+	char buf[length];
+	fread( buf , 1 , length , original_fopen_ret );
+
+	// reset seek
+	fseek( original_fopen_ret , 0 , current_pos );
+
 	// create fingerprint
 	MD5_CTX context;
 	MD5_Init( &context );
-	MD5_Update( &context , original_fopen_ret , length );
+	MD5_Update( &context , buf , length );
 	MD5_Final( fingerprint , &context );
 
 	// Log to file
 	FILE* log = (*original_fopen)( "file_logging.log" , "a" );
 
 	fprintf( log , "%u %u %u %s " , user_id , access_type , action_denied , actual_path );
-	for(int i = 0; i < 16; i++)
+	for(int i = 0; i < MD5_DIGEST_LENGTH; i++)
 		fprintf( log , "%02x", (unsigned int)fingerprint[i] );
 	fprintf( log , " %ld\n" , t );
 
@@ -94,7 +99,7 @@ size_t fwrite( const void* ptr , size_t size , size_t nmemb , FILE* stream )
 
 	// check if action denied
 	uint action_denied = 0;
-	if( !original_fwrite_ret )
+	if( !original_fwrite_ret && ( errno == EACCES || errno == EBADF ) )
 		action_denied = 1;
 
 	// get actual path
@@ -109,18 +114,25 @@ size_t fwrite( const void* ptr , size_t size , size_t nmemb , FILE* stream )
 	path[bytes] = '\0';
 
 	// create file fingerprint
-	unsigned char fingerprint[16];
+	unsigned char fingerprint[MD5_DIGEST_LENGTH];
 
 	// get files size
 	int current_pos = ftell(stream);
 	fseek( stream , 0 , SEEK_END );
 	int length = ftell(stream);
+
+	// read file
+	fseek( stream , 0 , SEEK_SET );
+	char buf[length];
+	fread( buf , 1 , length , stream );
+
+	// reset seek
 	fseek( stream , 0 , current_pos );
 
 	// create fingerprint
 	MD5_CTX context;
 	MD5_Init( &context );
-	MD5_Update( &context , stream , length );
+	MD5_Update( &context , buf , length );
 	MD5_Final( fingerprint , &context );
 
 	// Log to file
@@ -129,7 +141,7 @@ size_t fwrite( const void* ptr , size_t size , size_t nmemb , FILE* stream )
 	FILE* log = (*original_fopen)( "file_logging.log" , "a" );
 
 	fprintf( log , "%u %u %u %s " , user_id , access_type , action_denied , path );
-	for(int i = 0; i < 16; i++)
+	for(int i = 0; i < MD5_DIGEST_LENGTH; i++)
 		fprintf( log , "%02x", (unsigned int)fingerprint[i]);
 	fprintf( log , " %ld\n" , t );
 

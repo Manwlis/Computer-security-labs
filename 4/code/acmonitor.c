@@ -113,9 +113,63 @@ void list_file_modifications( FILE *log , char *file_to_scan )
 {
 
 
+	// get log file's size
+	int num_entries = 0;
+	while (EOF != ( fscanf( log , "%*[^\n]" ) , fscanf( log , "%*c" ) ) )
+        num_entries++;
+	fseek( log , 0 , SEEK_SET );
+
+	// get entries from log file
+	struct entry entries[num_entries];
+	get_entries( log , entries , num_entries );
+
+	// create array with users
+	int num_users = 0;
+	int users[num_entries]; // worst case is every entry is from another user
+	// for every entry
+	for( int i = 0 ; i < num_entries ; i++ )
+	{
+		uint duplicate = 0;
+		// if it's user is already in the user table
+		for(int k = 0 ; k < num_users ; k++)
+			if( entries[i].uid == users[k] )
+				duplicate = 1; // user has already been recorded
+
+		// if not found
+		if( duplicate == 0 )
+		{ // put him in
+			users[num_users] = entries[i].uid;
+			num_users++;
+		}
+	}
+
+	int changes_per_user[num_users];
+	for( int i = 0 ; i < num_users ; i++ )
+		changes_per_user[i] = 0;
+
+	char actual_path[PATH_MAX+1];
+	realpath( file_to_scan , actual_path );
+	char previous_fingerprint[33] = " ";
+	// for every entry
+	for( int i = 0 ; i < num_entries ; i++ )
+	{
+		// that match the file and has different fingerprint from its last occurent
+		if( !strcmp( entries[i].file , actual_path ) && strcmp( entries[i].fingerprint , previous_fingerprint ) != 0 )
+		{
+			// change last occurrence fingerprint
+			strcpy( previous_fingerprint , entries[i].fingerprint );
+			// increment user's changes.
+			for( int k = 0 ; k < num_users ; k++ )
+			{
+				if( entries[i].uid == users[k] )
+					changes_per_user[k]++;
+			}
+		}
+	}
+	for( int i = 0 ; i < num_users ; i++ )
+		printf("%s	%d\n" , getpwuid( users[i] )->pw_name , changes_per_user[i] );
 
 	return;
-
 }
 
 
