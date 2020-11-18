@@ -37,7 +37,7 @@ void usage(void)
 	exit(1);
 }
 
-
+// Creates an array of entries from the .log file
 void get_entries( FILE* log , entry* entries , int num_entries )
 {
 	for(int i = 0 ; i < num_entries ; i++ )
@@ -111,8 +111,6 @@ void list_unauthorized_accesses( FILE* log )
 
 void list_file_modifications( FILE *log , char *file_to_scan )
 {
-
-
 	// get log file's size
 	int num_entries = 0;
 	while (EOF != ( fscanf( log , "%*[^\n]" ) , fscanf( log , "%*c" ) ) )
@@ -153,16 +151,19 @@ void list_file_modifications( FILE *log , char *file_to_scan )
 	// for every entry
 	for( int i = 0 ; i < num_entries ; i++ )
 	{
-		// that match the file and has different fingerprint from its last occurent
+		// that match the file, has different fingerprint from its last occurent
 		if( !strcmp( entries[i].file , actual_path ) && strcmp( entries[i].fingerprint , previous_fingerprint ) != 0 )
 		{
-			// change last occurrence fingerprint
-			strcpy( previous_fingerprint , entries[i].fingerprint );
-			// increment user's changes.
+			// increment its user's changes
 			for( int k = 0 ; k < num_users ; k++ )
-			{
-				if( entries[i].uid == users[k] )
+			{	// if he changed the file ( not denied and not open )
+				if( entries[i].uid == users[k] && entries[i].access_type != 1 && entries[i].action_denied != 1 )
+				{
 					changes_per_user[k]++;
+
+					// change last occurrence fingerprint
+					strcpy( previous_fingerprint , entries[i].fingerprint );
+				}
 			}
 		}
 	}

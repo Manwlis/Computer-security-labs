@@ -1,5 +1,9 @@
 #include <stdio.h>
 #include <string.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <unistd.h>
+#include <stdlib.h>
 
 
 int main() 
@@ -7,28 +11,30 @@ int main()
 	int i;
 	size_t bytes;
 	FILE *file;
-	char filenames[6][8] = { "file_0" , "file_1" , "file_2" , "file_3" , "file_4" , "file_5" };
-	char modes[6][3] = { "r" , "w" , "a" , "r+" , "w+" , "a+"  };
+	char filenames[2][7] = { "file_0" , "file_1"  };
 
 	// All of this should work if user has the appropriate rights
-	for (i = 0; i < 6; i++)
+	// file_0 and file_1 created once
+	for( int i = 0 ; i < 2 ; i++ )
 	{
 		file = fopen(filenames[i], "w+"); // file creation
 		if (file == NULL) 
+		{
 			printf("fopen error\n");
+			fflush(stdout);
+		}
 		else
 		{
-			bytes = fwrite(filenames[i], strlen(filenames[i]), 1, file); // file modification
 			fclose(file);
 		}
 	}
 
-	file = fopen(filenames[0], "r"); // file open
+	file = fopen(filenames[0], "r"); // file_0 open once
 	if (file == NULL) 
 		printf("fopen error\n");
 	else
-	{	// all should fail
-		bytes = fwrite(filenames[0], strlen(filenames[0]), 1, file); // file modification
+	{	// all should fail because file was opened with wrong mode
+		bytes = fwrite(filenames[0], strlen(filenames[0]), 1, file); // file modification 5 times
 		bytes = fwrite(filenames[0], strlen(filenames[0]), 1, file);
 		bytes = fwrite(filenames[0], strlen(filenames[0]), 1, file);
 		bytes = fwrite(filenames[0], strlen(filenames[0]), 1, file);
@@ -36,12 +42,12 @@ int main()
 		fclose(file);
 	}
 
-	file = fopen(filenames[1], "w+"); // file open
+	file = fopen(filenames[1], "r+"); // file_1 open once
 	if (file == NULL) 
 		printf("fopen error\n");
 	else
 	{	// all should work if user has write rights
-		bytes = fwrite(filenames[1], strlen(filenames[1]), 1, file); // file modification
+		bytes = fwrite(filenames[1], strlen(filenames[1]), 1, file); // file modification 5 times
 		bytes = fwrite(filenames[1], strlen(filenames[1]), 1, file);
 		bytes = fwrite(filenames[1], strlen(filenames[1]), 1, file);
 		bytes = fwrite(filenames[1], strlen(filenames[1]), 1, file);
@@ -49,3 +55,13 @@ int main()
 		fclose(file);
 	}
 }
+/* In total:
+ * If user has write rights for both files
+ * file_0 is created once
+ * file_0 is created once and modified 5 times
+ * 5  denied accesses
+ *
+ * If user does not have any write rights
+ * No file is created or modified
+ * 8 denied accesses
+ */

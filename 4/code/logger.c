@@ -10,6 +10,7 @@
 #include <openssl/md5.h>
 #include <linux/limits.h>
 #include <errno.h>
+#include <sys/stat.h>
 
 
 FILE* fopen( const char* path , const char* mode ) 
@@ -45,20 +46,37 @@ FILE* fopen( const char* path , const char* mode )
 
 	// create file fingerprint
 	unsigned char fingerprint[MD5_DIGEST_LENGTH];
+	int length = 0;
+	char* buf;
 
+	// if open failed try to open it again with read mode in order to create fingerprint
+	int internal_open_flag = 0;
+	if( !original_fopen_ret )
+	{
+		internal_open_flag = 1;
+		original_fopen_ret = (*original_fopen)( path , "r" );
+	}
 	// get files size
-	int current_pos = ftell( original_fopen_ret );
-	fseek( original_fopen_ret , 0 , SEEK_END );
-	int length = ftell( original_fopen_ret );
+	if( original_fopen_ret )
+	{
+		int current_pos = ftell( original_fopen_ret );
+		fseek( original_fopen_ret , 0 , SEEK_END );
+		length = ftell( original_fopen_ret );
 
-	// read file
-	fseek( original_fopen_ret , 0 , SEEK_SET );
-	char buf[length];
-	fread( buf , 1 , length , original_fopen_ret );
+		// read file
+		fseek( original_fopen_ret , 0 , SEEK_SET );
+		buf = malloc( length );
+		fread( buf , 1 , length , original_fopen_ret );
 
-	// reset seek
-	fseek( original_fopen_ret , 0 , current_pos );
-
+		// reset seek
+		fseek( original_fopen_ret , 0 , current_pos );
+	}
+	// if logger opened the file, close it
+	if ( internal_open_flag == 1 )
+	{
+		fclose( original_fopen_ret );
+		original_fopen_ret = NULL;
+	}
 	// create fingerprint
 	MD5_CTX context;
 	MD5_Init( &context );
@@ -67,6 +85,7 @@ FILE* fopen( const char* path , const char* mode )
 
 	// Log to file
 	FILE* log = (*original_fopen)( "file_logging.log" , "a" );
+	chmod( "file_logging.log"  , 0777 );
 
 	fprintf( log , "%u %u %u %s " , user_id , access_type , action_denied , actual_path );
 	for(int i = 0; i < MD5_DIGEST_LENGTH; i++)
@@ -139,6 +158,7 @@ size_t fwrite( const void* ptr , size_t size , size_t nmemb , FILE* stream )
 	FILE* (*original_fopen)( const char* , const char* );
 	original_fopen = dlsym( RTLD_NEXT , "fopen" );
 	FILE* log = (*original_fopen)( "file_logging.log" , "a" );
+	chmod( "file_logging.log"  , 0777 );
 
 	fprintf( log , "%u %u %u %s " , user_id , access_type , action_denied , path );
 	for(int i = 0; i < MD5_DIGEST_LENGTH; i++)
