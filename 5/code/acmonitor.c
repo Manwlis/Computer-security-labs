@@ -31,6 +31,8 @@ void usage(void)
 		   "-m, Prints malicious users\n"
 		   "-i <filename>, Prints table of users that modified "
 		   "the file <filename> and the number of modifications\n"
+		   "-v, Prints the total number of files created in the last 20 minutes\n"
+		   "-e, Prints all the files that were encrypted by the ransomware\n"
 		   "-h, Help message\n\n"
 		   );
 
@@ -174,9 +176,82 @@ void list_file_modifications( FILE *log , char *file_to_scan )
 }
 
 
-int main(int argc, char *argv[])
+void num_files_created_20m( FILE *log , int suspicious_behavior )
 {
+	// get log file's size
+	int num_entries = 0;
+	while (EOF != ( fscanf( log , "%*[^\n]" ) , fscanf( log , "%*c" ) ) )
+		num_entries++;
+	fseek( log , 0 , SEEK_SET );
 
+	// get entries from log file
+	struct entry entries[num_entries];
+	get_entries( log , entries , num_entries );
+
+	// get time 20 min ago
+	time_t twenty_minutes_ago = time(NULL) - 20*60;
+
+	// how many files were created in last 20 minutes
+	int num_created_files = 0;
+
+	// for every entry
+	for( int i = 0 ; i < num_entries ; i++ )
+		// that is in the timeframe
+		if( entries[i].date_time > twenty_minutes_ago )
+			// and a file was successfully created
+			if( entries[i].access_type == 0 && entries[i].action_denied == 0 )
+				// increment the counter
+				num_created_files++;
+
+	printf( "Num created files in last 20 minutes: %d\n" , num_created_files );
+	if( num_created_files >= suspicious_behavior )
+		printf("Suspicious behaviour\n");
+	else
+		printf("No suspicious behaviour\n");
+}
+
+
+// Used by list_encrypted_files function to find the extension of a file.
+const char* get_filename_ext( const char *filename )
+{
+	const char *dot = strrchr( filename , '.' );
+	if( !dot || dot == filename ) 
+		return "";
+}
+
+
+// If a "name".encrypt file was created, then the "name" file was encrypted and the function prints it.
+void list_encrypted_files( FILE *log )
+{
+	// get log file's size
+	int num_entries = 0;
+	while (EOF != ( fscanf( log , "%*[^\n]" ) , fscanf( log , "%*c" ) ) )
+		num_entries++;
+	fseek( log , 0 , SEEK_SET );
+
+	// get entries from log file
+	struct entry entries[num_entries];
+	get_entries( log , entries , num_entries );
+
+	// for every entry
+	for( int i = 0 ; i < num_entries ; i++ )
+		// if it the successful creation of a file
+		if( entries[i].access_type == 0 && entries[i].action_denied == 0 )
+			// and if the file has the suffix ".encrypt"
+			if( strcmp( get_filename_ext( entries[i].file ) , ".encrypt" ) == 0 )
+			{
+				// remove suffix to get the name of the original file
+				char copy [ PATH_MAX+1 ];
+				strcpy( copy , entries[i].file );
+				*strrchr( copy , '.' ) = '\0';
+				// and print it
+				printf( "%s\n" , copy );
+			}
+}
+
+
+int main( int argc , char *argv[] )
+{
 	int ch;
 	FILE *log;
 
@@ -189,13 +264,21 @@ int main(int argc, char *argv[])
 		return 1;
 	}
 
-	while ((ch = getopt(argc, argv, "hi:m")) != -1) {
-		switch (ch) {		
+	while ( ( ch = getopt( argc , argv , "hiv:me" ) ) != -1 )
+	{
+		switch (ch)
+		{		
 		case 'i':
-			list_file_modifications(log, optarg);
+			list_file_modifications( log , optarg );
 			break;
 		case 'm':
 			list_unauthorized_accesses(log);
+			break;
+		case 'v':
+			num_files_created_20m( log , atoi( optarg ) );
+			break;
+		case 'e':
+			list_encrypted_files( log );
 			break;
 		default:
 			usage();
