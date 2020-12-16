@@ -9,6 +9,7 @@
 #include <linux/tcp.h>
 #include <linux/udp.h>
 #include <string.h>
+#include <signal.h>
 
 
 struct network_flow
@@ -18,16 +19,21 @@ struct network_flow
 	unsigned short port_src;
 	unsigned short port_dst;
 	uint8_t protocol;
-	unsigned int last_acknowledgment; // used to discover retransmissions
+	unsigned int expected_seq; // used to discover retransmissions
 };
+
+pcap_t* handle; // global so it can be accessed by signal handler
 
 struct network_flow* network_flows_array;
 int num_network_flows;
+int num_tcp_network_flows;
+int num_udp_network_flows;
 int num_packets_received;
 int num_tcp_packets_received;
 int num_udp_packets_received;
 int num_tcp_bytes_received;
 int num_udp_bytes_received;
+
 
 void usage(void)
 {
@@ -45,16 +51,30 @@ void usage(void)
 }
 
 
+// Signal handler for terminating pcap_loop
+void terminate_process( int signum )
+{
+   pcap_breakloop( handle );
+} 
+
+
 void packet_handler( u_char* args , const struct pcap_pkthdr* packet_header, const u_char *packet_body )
 {
+	num_packets_received++;
 	// 3. Decode each received packet
 	/***************** Ethernet Protocol *****************/
 	struct ether_header* eth_header;
     eth_header = (struct ether_header*) packet_body;
 
+	uint16_t ether_type = ntohs( eth_header->ether_type );
+
+	// Both UDP and TCP run on top of IP
+	// 4. Skip any packet that is not TCP or UDP
+	if( ether_type != ETHERTYPE_IP && ether_type != ETHERTYPE_IPV6 )
+		return;
 
 	/***************** Internet Protocol *****************/
-	// different headers for ipv4 & ipv6
+	// Different headers for ipv4 & ipv6
 	struct ip* ip_header = (struct ip*) ( packet_body + sizeof( struct ether_header ) );
 	struct ip6_hdr* ip6_header = (struct ip6_hdr*) ( packet_body + sizeof( struct ether_header ) );
 	
@@ -74,10 +94,7 @@ void packet_handler( u_char* args , const struct pcap_pkthdr* packet_header, con
 	
 	// 4. Skip any packet that is not TCP or UDP
 	if( packet_type != IPPROTO_TCP && packet_type != IPPROTO_UDP )
-	{
-		num_packets_received++;
 		return;
-	}
 
 	// IP to human readable form
 	int af = ( ip_header->ip_v == 4 ) ? AF_INET : AF_INET6;
@@ -109,11 +126,14 @@ void packet_handler( u_char* args , const struct pcap_pkthdr* packet_header, con
 		protocol_header_length = 8;
 	}
 
+
 	/******************** Payload ********************/
-	unsigned int payload_length = packet_header->len - sizeof( struct ether_header ) - ip_header_length - protocol_header_length;
+	// packet length - all headers
+	unsigned int payload_length = packet_header->caplen - sizeof( struct ether_header ) - ip_header_length - protocol_header_length;
 	
 
 	/*************** Print packet info ***************/
+	printf( "\n%d\n" , num_packets_received ); // print packet number so the results can be easily compared with wireshark
 	// 5. Print the packet’s source and destination IP addresses
 	printf(
 		"Source IP:		%s\n"
@@ -134,62 +154,90 @@ void packet_handler( u_char* args , const struct pcap_pkthdr* packet_header, con
 	// 8. Print the packet’s TCP/UDP header length and TCP/UDP payload length in bytes.
 	printf(
 		"Protocol header length:	%d\n"
-		"Payload length:		%d\n\n"
+		"Payload length:		%d\n"
 		, protocol_header_length , payload_length
 		);
 
 
 	/**************** Network Flows *****************/
-	// first packet, array is empty
-	if( network_flows_array == NULL )
+	int doesnt_exist_flag = 1;
+	int tuple_pos; // where it is if it was found
+	// Check if 5-tuple exists in array
+	for( int i = 0 ; i < num_network_flows ; i++ )
 	{
-		network_flows_array = (struct network_flow*) malloc( sizeof( struct network_flow ) );
-		network_flows_array[0].ip_src = (char*) malloc( ( ip_header->ip_v == 4 ) ? INET_ADDRSTRLEN : INET6_ADDRSTRLEN );
-		network_flows_array[0].ip_dst = (char*) malloc( ( ip_header->ip_v == 4 ) ? INET_ADDRSTRLEN : INET6_ADDRSTRLEN );
-
-		strcpy( network_flows_array[0].ip_src , ip_src_string );
-		strcpy( network_flows_array[0].ip_dst , ip_dst_string );
-
-		network_flows_array[0].port_src = port_src;
-		network_flows_array[0].port_dst = port_dst;
-
-		network_flows_array[0].protocol = packet_type;
+		if( 
+			strcmp( network_flows_array[i].ip_src , ip_src_string ) == 0 &&
+			strcmp( network_flows_array[i].ip_dst , ip_dst_string ) == 0 &&
+			network_flows_array[i].port_src == port_src &&
+			network_flows_array[i].port_dst == port_dst &&
+			network_flows_array[i].protocol == packet_type
+			)
+		{
+			doesnt_exist_flag = 0;
+			tuple_pos = i;
+			break;
+		}
 	}
-	else // na tsekarei oti den ksanauparxei
+	// If not, put it in
+	if( doesnt_exist_flag )
 	{
-		network_flows_array = realloc( network_flows_array , ( num_packets_received + 1 ) * sizeof( struct network_flow ) ); // prepei na allaksei to num_packets_received se num tuples
-		network_flows_array[num_packets_received].ip_src = (char*) malloc( ( ip_header->ip_v == 4 ) ? INET_ADDRSTRLEN : INET6_ADDRSTRLEN );
-		network_flows_array[num_packets_received].ip_dst = (char*) malloc( ( ip_header->ip_v == 4 ) ? INET_ADDRSTRLEN : INET6_ADDRSTRLEN );
+		// Copy 5-tuple in a new line
+		network_flows_array = realloc( network_flows_array , ( num_network_flows + 1 ) * sizeof( struct network_flow ) );
+		network_flows_array[num_network_flows].ip_src = (char*) malloc( ( ip_header->ip_v == 4 ) ? INET_ADDRSTRLEN : INET6_ADDRSTRLEN );
+		network_flows_array[num_network_flows].ip_dst = (char*) malloc( ( ip_header->ip_v == 4 ) ? INET_ADDRSTRLEN : INET6_ADDRSTRLEN );
 
-		strcpy( network_flows_array[num_packets_received].ip_src , ip_src_string );
-		strcpy( network_flows_array[num_packets_received].ip_dst , ip_dst_string );
+		strcpy( network_flows_array[num_network_flows].ip_src , ip_src_string );
+		strcpy( network_flows_array[num_network_flows].ip_dst , ip_dst_string );
 
-		network_flows_array[num_packets_received].port_src = port_src;
-		network_flows_array[num_packets_received].port_dst = port_dst;
+		network_flows_array[num_network_flows].port_src = port_src;
+		network_flows_array[num_network_flows].port_dst = port_dst;
 
-		network_flows_array[num_packets_received].protocol = packet_type;
+		network_flows_array[num_network_flows].protocol = packet_type;
+
+		// keep network flow stats
+		num_network_flows++;
+
+		if( packet_type == IPPROTO_TCP )
+		{
+			num_tcp_network_flows++;
+			// network_flows_array[num_network_flows].expected_seq = ntohl( tcp_header->seq ) + payload_length;
+		}
+		else
+			num_udp_network_flows++;
 	}
-
+	else // if the flow exists check the packet for retransmission
+	{
 	/**************** Retransmission ****************/
+// Doesn't function correctly
+		// In TCP, if the next expected sequence number is greater than the current sequence number, the packet is a retransmission
+		// if( packet_type == IPPROTO_TCP )
+		// {
+		// 	// retransmission
+		// 	if(  ntohl( tcp_header->seq ) + payload_length < network_flows_array[tuple_pos].expected_seq )
+		// 		// 11. In your program (when possible), mark each retransmitted packet as “Retransmitted”
+		// 		printf("Retransmission\n");
+		// 	// not a retransmission
+		// 	else
+		// 		network_flows_array[tuple_pos].expected_seq = ntohl( tcp_header->seq ) + payload_length;
+		// }
 
-
-	
+		// In UDP if a packet get lost/corrupted, the sender is not informed about it. If they cannot know about it's state, they cannot retransmit it.
+		// Underlying protocols build upon UDP on application level can serve this functionality, but for the UDP protocol the retransmition is not the same packet.
+		// Nothing to do
+	}
 	
 	/****************** Keep Stats ******************/
-	num_packets_received++;
-
 	if(packet_type == IPPROTO_TCP)
 	{
 		num_tcp_packets_received++;
+		// from what I understand, the assignment requests the total size of TCP/UDP header and pauload
 		num_tcp_bytes_received += protocol_header_length + payload_length;
 	}
 	else // udp
 	{
 		num_udp_packets_received++;
 		num_udp_bytes_received += protocol_header_length + payload_length;
-	}
-	
-	
+	} 
 }
 
 
@@ -197,9 +245,8 @@ int main( int argc , char* argv[] )
 {
 	int ch;
 
-    char error_buffer[PCAP_ERRBUF_SIZE];
-    pcap_t *handle;
-    int timeout_limit = 10000; /* In milliseconds */
+	char error_buffer[PCAP_ERRBUF_SIZE];
+	int timeout_limit = 10000; /* In milliseconds */
 
 	if (argc != 3 )
 		usage();
@@ -221,6 +268,7 @@ int main( int argc , char* argv[] )
 			usage();
 		}
 	}
+	// Init global variables
 	network_flows_array = NULL;
 	num_network_flows = 0;
 	num_packets_received = 0;
@@ -228,27 +276,20 @@ int main( int argc , char* argv[] )
 	num_udp_packets_received = 0;
 	num_tcp_bytes_received = 0;
 	num_udp_bytes_received = 0;
+
+	signal( SIGINT , terminate_process );
 	// 2. Start capturing/reading packets
     pcap_loop( handle , 0 , packet_handler , NULL );
 
-printf("\n\n");
-	for( int i = 0 ; i < num_packets_received ; i++ )
-	{
-		printf("%s\n" , network_flows_array[i].ip_src );
-		printf("%s\n" , network_flows_array[i].ip_dst );
-
-		printf("%hu\n" , network_flows_array[i].port_src );
-		printf("%hu\n" , network_flows_array[i].port_dst );
-
-		printf("%s\n\n" , ( network_flows_array[i].protocol == IPPROTO_TCP ) ? "TCP" : "UDP" );
-	}
-printf("\n\n");
 	// 12. Print statistics
 	// a.
+	printf( "\nTotal number of network flows:	%d\n" , num_network_flows ) ;
 	// b.
+	printf( "Total number of TCP network flows:	%d\n" , num_tcp_network_flows ) ;
 	// c.
+	printf( "Total number of UDP network flows:	%d\n" , num_udp_network_flows ) ;
 	// d.
-	printf( "Total number of packets received:	%d\n" , num_packets_received) ;
+	printf( "Total number of packets received:	%d\n" , num_packets_received ) ;
 	// e.
 	printf( "Total number of TCP packets received:	%d\n" , num_tcp_packets_received );
 	// f.
@@ -259,4 +300,6 @@ printf("\n\n");
 	printf( "Total number of UDP bytes received:	%d\n" , num_udp_bytes_received );
 
 	// clean-up
+	free( network_flows_array );
+	pcap_close(handle);
 }
